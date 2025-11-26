@@ -25,7 +25,7 @@ from detector.YOLOv5.utils.torch_utils import select_device, time_sync
 
 class YOLOv5(object):
     def __init__(self, weight='yolov5s.pt', data='data/coco128.yaml', imgsz=[640, 640],
-                 conf_thres=0.25, nms_thres=0.45, max_det=1000, device='cuda:0', dnn=False):
+                 conf_thres=0.25, nms_thres=0.45, max_det=1000, device='cpu', dnn=False):
         super().__init__()
         self.device = select_device(device)
         self.net = DetectMultiBackend(weight, device=self.device, dnn=dnn, data=data)

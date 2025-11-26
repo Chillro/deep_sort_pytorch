@@ -8,7 +8,7 @@ from .mmdet_utils import xyxy_to_xywh
 
 class MMDet(object):
     def __init__(self, cfg_file, checkpoint_file, score_thresh=0.7,
-                 is_xywh=False, use_cuda=True):
+                 is_xywh=False, use_cuda=False):
         # net definition
         self.device = "cuda" if use_cuda else "cpu"
         self.net = init_detector(cfg_file, checkpoint_file, device=self.device)

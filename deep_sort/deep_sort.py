@@ -54,7 +54,7 @@ class DeepSort(object):
             x1, y1, x2, y2 = self._tlwh_to_xyxy(box)
             track_id = track.track_id
             track_cls = track.cls
-            outputs.append(np.array([x1, y1, x2, y2, track_cls, track_id], dtype=np.int32))
+            outputs.append(np.array([x1, y1, x2, y2, track_id, track_cls], dtype=np.int32))
             if track.mask is not None:
                 mask_outputs.append(track.mask)
         if len(outputs) > 0:

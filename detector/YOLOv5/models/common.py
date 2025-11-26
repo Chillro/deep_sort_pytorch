@@ -29,6 +29,26 @@ from detector.YOLOv5.utils.general import (LOGGER, check_requirements, check_suf
 from detector.YOLOv5.utils.plots import Annotator, colors, save_one_box
 from detector.YOLOv5.utils.torch_utils import copy_attr, time_sync
 
+# ============================
+# Patch: Fix Upsample for PyTorch 1.12 (no recompute_scale_factor)
+# ============================
+import torch.nn.functional as F
+import torch.nn as nn
+
+def patched_upsample_forward(self, input):
+    return F.interpolate(
+        input,
+        self.size,
+        self.scale_factor,
+        self.mode,
+        self.align_corners,
+        None  # recompute_scale_factor is unavailable on older torch versions
+    )
+
+# apply patch
+nn.Upsample.forward = patched_upsample_forward
+# ============================
+
 
 def autopad(k, p=None):  # kernel, padding
     # Pad to 'same'

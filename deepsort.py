@@ -79,8 +79,7 @@ class VideoTracker(object):
     def run(self):
         results = []
         idx_frame = 0
-        with open('coco_classes.json', 'r') as f:
-            idx_to_class = json.load(f)
+        idx_to_class = self.detector.class_names
         while self.vdo.grab():
             idx_frame += 1
             if idx_frame % self.args.frame_interval:
@@ -97,17 +96,17 @@ class VideoTracker(object):
                 bbox_xywh, cls_conf, cls_ids = self.detector(im)
 
             # select person class
-            mask = cls_ids == 0
+            # mask = cls_ids == 0
 
-            bbox_xywh = bbox_xywh[mask]
+            # bbox_xywh = bbox_xywh[mask]
             # bbox dilation just in case bbox too small, delete this line if using a better pedestrian detector
-            bbox_xywh[:, 2:] *= 1.2
-            cls_conf = cls_conf[mask]
-            cls_ids = cls_ids[mask]
+            #bbox_xywh[:, 2:] *= 1.2
+            # cls_conf = cls_conf[mask]
+            # cls_ids = cls_ids[mask]
 
             # do tracking
             if self.args.segment:
-                seg_masks = seg_masks[mask]
+                # seg_masks = seg_masks[mask]
                 outputs, mask_outputs = self.deepsort.update(bbox_xywh, cls_conf, cls_ids, im, seg_masks)
             else:
                 outputs, _ = self.deepsort.update(bbox_xywh, cls_conf, cls_ids, im)
@@ -117,15 +116,18 @@ class VideoTracker(object):
                 bbox_tlwh = []
                 bbox_xyxy = outputs[:, :4]
                 identities = outputs[:, -1]
-                cls = outputs[:, -2]
-                names = [idx_to_class[str(label)] for label in cls]
+
+                det_classes = cls_ids  # YOLOの検出順
+                track_classes = det_classes[:len(outputs)]  # 対応する分だけ切り取る
+
+                names = [idx_to_class[int(c)] for c in track_classes]
 
                 ori_im = draw_boxes(ori_im, bbox_xyxy, names, identities, None if not self.args.segment else mask_outputs)
 
                 for bb_xyxy in bbox_xyxy:
                     bbox_tlwh.append(self.deepsort._xyxy_to_tlwh(bb_xyxy))
 
-                results.append((idx_frame - 1, bbox_tlwh, identities, cls))
+                results.append((idx_frame - 1, bbox_tlwh, identities, track_classes))
 
             end = time.time()
 
