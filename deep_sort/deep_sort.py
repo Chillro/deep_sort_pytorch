@@ -6,6 +6,7 @@ from .sort.nn_matching import NearestNeighborDistanceMetric
 from .sort.preprocessing import non_max_suppression
 from .sort.detection import Detection
 from .sort.tracker import Tracker
+from .sort.track import TrackState
 
 __all__ = ['DeepSort']
 
@@ -27,39 +28,63 @@ class DeepSort(object):
 
     def update(self, bbox_xywh, confidences, classes, ori_img, masks=None):
         self.height, self.width = ori_img.shape[:2]
-        # generate detections
+    
+        # 1. すべての detection を生成
         features = self._get_features(bbox_xywh, ori_img)
         bbox_tlwh = self._xywh_to_tlwh(bbox_xywh)
-        detections = [Detection(bbox_tlwh[i], conf, label, features[i], None if masks is None else masks[i])
-                      for i, (conf, label) in enumerate(zip(confidences, classes))
-                      if conf > self.min_confidence]
 
-        # run on non-maximum supression
+        detections = []
+        for i, (conf, cls_id) in enumerate(zip(confidences, classes)):
+            if conf < self.min_confidence:
+                continue
+            detections.append(
+                Detection(bbox_tlwh[i], conf, cls_id, features[i], None if masks is None else masks[i])
+            )
+
+        # 2. NMS
+        if len(detections) == 0:
+            return np.array([]), []
+
         boxes = np.array([d.tlwh for d in detections])
         scores = np.array([d.confidence for d in detections])
         indices = non_max_suppression(boxes, self.nms_max_overlap, scores)
         detections = [detections[i] for i in indices]
 
-        # update tracker
+        # 3. Tracker 更新
         self.tracker.predict()
         self.tracker.update(detections)
 
-        # output bbox identities
+         # 4. detection.cls を track.cls へ正しくコピー
+        for track in self.tracker.tracks:
+            if not track.is_confirmed() or track.time_since_update > 1:
+                continue
+            if track.last_detection is not None:
+                track.cls = track.last_detection.cls
+    
+        # 5. 返り値を生成
         outputs = []
         mask_outputs = []
         for track in self.tracker.tracks:
             if not track.is_confirmed() or track.time_since_update > 1:
                 continue
+
             box = track.to_tlwh()
             x1, y1, x2, y2 = self._tlwh_to_xyxy(box)
-            track_id = track.track_id
-            track_cls = track.cls
-            outputs.append(np.array([x1, y1, x2, y2, track_id, track_cls], dtype=np.int32))
+            
+            cls_id = track.cls if track.cls is not None else -1  # YOLO誤認防止
+            
+            outputs.append(np.array(
+                [x1, y1, x2, y2, cls_id, track.track_id], dtype=np.int32
+            ))
+
             if track.mask is not None:
                 mask_outputs.append(track.mask)
+
         if len(outputs) > 0:
             outputs = np.stack(outputs, axis=0)
+
         return outputs, mask_outputs
+
 
     """
     TODO:

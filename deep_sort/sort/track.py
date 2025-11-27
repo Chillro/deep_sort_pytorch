@@ -65,15 +65,19 @@ class Track:
 
     def __init__(self, mean, covariance, track_id, n_init, max_age,
                  feature=None, cls=None, mask=None):
+        self.track_id = None
+        self._pending_id = track_id
+        self.is_confirmed_id_assigned = False
+        
         self.mean = mean
         self.covariance = covariance
-        self.track_id = track_id
         self.hits = 1
         self.age = 1
         self.time_since_update = 0
 
         self.state = TrackState.Tentative
-        self.cls = cls
+        self.cls = cls      # ← detection.cls を初期値に入れるようにする
+        self.last_detection = None   # ★追加
         self.mask = mask
         self.features = []
         if feature is not None:

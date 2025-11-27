@@ -26,10 +26,10 @@ class Detection(object):
 
     """
 
-    def __init__(self, tlwh, confidence, label, feature, mask=None):
+    def __init__(self, tlwh, confidence, cls, feature, mask=None):
         self.tlwh = np.asarray(tlwh, dtype=np.float32)
         self.confidence = float(confidence)
-        self.cls = int(label)
+        self.cls = int(cls)
         self.feature = np.asarray(feature, dtype=np.float32)
         self.mask = mask
 

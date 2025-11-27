@@ -40,6 +40,12 @@ class VideoTracker(object):
         self.detector = build_detector(cfg, use_cuda=use_cuda, segment=self.args.segment)
         self.deepsort = build_tracker(cfg, use_cuda=use_cuda)
         self.class_names = self.detector.class_names
+    
+    def get_track_by_id(self, track_id):
+        for t in self.deepsort.tracker.tracks:
+            if t.track_id == track_id:
+                return t
+        return None
 
     def __enter__(self):
         if self.args.cam != -1:
@@ -117,17 +123,37 @@ class VideoTracker(object):
                 bbox_xyxy = outputs[:, :4]
                 identities = outputs[:, -1]
 
-                det_classes = cls_ids  # YOLOの検出順
-                track_classes = det_classes[:len(outputs)]  # 対応する分だけ切り取る
-
+                track_classes = outputs[:, 4]   # outputs の5列目が track.cls
                 names = [idx_to_class[int(c)] for c in track_classes]
 
+
                 ori_im = draw_boxes(ori_im, bbox_xyxy, names, identities, None if not self.args.segment else mask_outputs)
+                
+                # ★ Confirmed のものだけを result に残す
+                confirmed_tlwh = []
+                confirmed_ids = []
+                confirmed_cls = []
 
-                for bb_xyxy in bbox_xyxy:
-                    bbox_tlwh.append(self.deepsort._xyxy_to_tlwh(bb_xyxy))
+                for bbox, tid, cls_id in zip(bbox_xyxy, identities, track_classes):
 
-                results.append((idx_frame - 1, bbox_tlwh, identities, track_classes))
+                    # DeepSORT 内部の track オブジェクトを取得
+                    track_obj = self.get_track_by_id(int(tid))
+                    if track_obj is None:
+                        continue  # 一致しない → 既に削除されている track
+                    if not track_obj.is_confirmed():
+                        continue
+
+                    # Confirmed のものだけ TLWH へ
+                    tlwh = self.deepsort._xyxy_to_tlwh(bbox)
+                    confirmed_tlwh.append(tlwh)
+                    confirmed_ids.append(tid)
+                    confirmed_cls.append(cls_id)
+
+                # 出力するトラックが残っていれば results に追加
+                if len(confirmed_ids) > 0:
+                    results.append(
+                        (idx_frame - 1, confirmed_tlwh, confirmed_ids, confirmed_cls)
+                    )
 
             end = time.time()
 

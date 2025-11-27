@@ -4,7 +4,7 @@ import numpy as np
 from . import kalman_filter
 from . import linear_assignment
 from . import iou_matching
-from .track import Track
+from .track import Track, TrackState
 
 
 class Tracker:
@@ -37,11 +37,13 @@ class Tracker:
 
     """
 
-    def __init__(self, metric, max_iou_distance=0.7, max_age=70, n_init=3):
+    def __init__(self, metric, max_iou_distance=0.7, max_age=6000, n_init=3):
         self.metric = metric
         self.max_iou_distance = max_iou_distance
         self.max_age = max_age
         self.n_init = n_init
+
+        self.confirmed_id_counter = 0
 
         self.kf = kalman_filter.KalmanFilter()
         self.tracks = []
@@ -70,8 +72,28 @@ class Tracker:
 
         # Update track set.
         for track_idx, detection_idx in matches:
-            self.tracks[track_idx].update(
-                self.kf, detections[detection_idx])
+            track = self.tracks[track_idx]
+            detection = detections[detection_idx]
+
+            # ★これが元の track.update（絶対に残す）
+            track.update(self.kf, detection)
+            
+            # ★ Confirmed になった瞬間に track_id を付与
+            if (not track.is_confirmed_id_assigned) and track.state == TrackState.Confirmed:
+                self.confirmed_id_counter += 1
+                track.track_id = self.confirmed_id_counter
+                track.is_confirmed_id_assigned = True
+                
+            # Tentative の間は cls をセットしない（揺れやすい）
+            if track.state == TrackState.Tentative:
+                continue
+
+            # Confirmed になってから最初の1回だけ cls を設定
+            if track.cls is None:
+                track.cls = detection.cls
+
+            track.last_detection = detection
+        
         for track_idx in unmatched_tracks:
             self.tracks[track_idx].mark_missed()
         for detection_idx in unmatched_detections:
